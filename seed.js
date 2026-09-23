@@ -19,8 +19,31 @@ async function seed() {
   //      so a post upvoted 50 times is guaranteed to climb into the top 10)
   // Then: await pipeline.exec();
 
+  const pipeline = redis.pipeline();
+
+  for (let i = 1; i <= 100; i++) {
+    const id = "post:" + i;
+
+    pipeline.hset(
+      id + ":meta",
+      "title",
+      "Post number " + i,
+      "author",
+      "@user" + i
+    );
+
+    pipeline.zadd(
+      "trending:posts",
+      Math.floor(Math.random() * 50),
+      id
+    );
+  }
+
+  await pipeline.exec();
+
   console.log("Seeded 100 posts.");
   redis.disconnect();
 }
 
 seed();
+
