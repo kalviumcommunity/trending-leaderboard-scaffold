@@ -11,6 +11,7 @@ async function run() {
 
   // Upvote the target 50 times.
   for (let i = 0; i < 50; i++) {
+    await upvote(target);
     // TODO: await upvote(target);
   }
 
