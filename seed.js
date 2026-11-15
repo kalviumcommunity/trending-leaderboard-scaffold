@@ -11,6 +11,25 @@ import { redis } from "./leaderboard.js";
 
 async function seed() {
   await redis.del("trending:posts");
+  const pipeline=redis.pipeline();
+  for(let i=1;i<=100;i++){
+    const id="post:"+i;
+    pipeline.hset(
+      id+":meta",
+      "title",
+      "post number" +i,
+      "author",
+      "@user"+i
+
+    );
+    const score = Math.floor(Math.random() * 50);
+
+    pipeline.zadd("trending:posts", score, id);
+  }
+
+  // Execute all 200 commands together
+  await pipeline.exec();
+  
 
   // TODO: build a pipeline and, for i = 1..100:
   //   - HSET post:<i>:meta title "Post number <i>" author "@user<i>"
@@ -24,3 +43,4 @@ async function seed() {
 }
 
 seed();
+
