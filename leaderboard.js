@@ -1,10 +1,5 @@
+
 // leaderboard.js — a trending leaderboard backed by a Redis sorted set + a hash per post.
-//
-// Storage shape:
-//   trending:posts        (sorted set)  member = postId, score = engagement  -> the ranking
-//   post:<id>:meta        (hash)        title, author                        -> the metadata
-//
-// You implement the two exported functions below. Everything else is wired for you.
 
 import Redis from "ioredis";
 import "dotenv/config";
@@ -13,31 +8,48 @@ const redis = new Redis(process.env.REDIS_URL);
 
 /**
  * Record one unit of engagement for a post.
- * Must be a SINGLE atomic Redis command (no read-modify-write).
- *
- * @param {string} postId  e.g. "post:104"
- * @returns {Promise<string>} the post's new score
+ * Must be a SINGLE atomic Redis command.
  */
 export async function upvote(postId) {
-  // TODO: ZINCRBY trending:posts by 1 for `postId` and return the new score.
-  //       ioredis: redis.zincrby(key, increment, member)
-  throw new Error("upvote() not implemented");
+  const score = await redis.zincrby("trending:posts", 1, postId);
+  return score;
 }
 
 /**
- * Fetch the top N posts, ranked high -> low, each WITH its metadata (title, author).
- * Must use ONE ioredis pipeline for all the HGETALL calls (not one round trip per post).
- *
- * @param {number} n  how many posts to return
- * @returns {Promise<Array<{ id: string, score: number, title?: string, author?: string }>>}
+ * Fetch the top N posts, ranked high -> low,
+ * each WITH its metadata (title, author).
  */
 export async function getTop(n) {
-  // TODO:
-  // 1. redis.zrevrange("trending:posts", 0, n - 1, "WITHSCORES")  -> flat [id, score, id, score, ...]
-  // 2. Build rows [{ id, score }] AND queue one pipeline.hgetall(id + ":meta") per id.
-  // 3. await pipeline.exec()  -> results[k] is [error, value] for the k-th queued command.
-  // 4. Merge: return rows.map((row, k) => ({ ...row, ...results[k][1] })).
-  throw new Error("getTop() not implemented");
+  // 1. Get top N posts with their scores
+  const posts = await redis.zrevrange(
+    "trending:posts",
+    0,
+    n - 1,
+    "WITHSCORES"
+  );
+
+  // 2. Build rows and create a pipeline
+  const rows = [];
+  const pipeline = redis.pipeline();
+
+  for (let i = 0; i < posts.length; i += 2) {
+    const id = posts[i];
+    const score = Number(posts[i + 1]);
+
+    rows.push({ id, score });
+
+    // 3. Queue metadata retrieval
+    pipeline.hgetall(id + ":meta");
+  }
+
+  // 4. Execute all HGETALL commands together
+  const results = await pipeline.exec();
+
+  // 5. Merge post data with metadata
+  return rows.map((row, k) => ({
+    ...row,
+    ...results[k][1]
+  }));
 }
 
 export { redis };
